@@ -1,0 +1,1058 @@
+% MATLAB App Code
+classdef Proyecto_PCM_F < matlab.ui.componentcontainer.ComponentContainer
+
+    % Properties that correspond to underlying components
+    properties (Access = private, Transient, NonCopyable)
+        SalirButton                     matlab.ui.control.Button
+        RepetirButton                   matlab.ui.control.Button
+        ReproduciraudiorecibidoButton   matlab.ui.control.Button
+        ReproduciraudioenviadoButton    matlab.ui.control.Button
+        SealRecibidaPanel               matlab.ui.container.Panel
+        SelectorGraficaSenalRecibida    matlab.ui.control.DropDown
+        GraficarSenalRecibidaButton     matlab.ui.control.Button
+        DecodificacinPanel              matlab.ui.container.Panel
+        SelectorGraficaDecodificacion   matlab.ui.control.DropDown
+        GraficarDecodificacionButton    matlab.ui.control.Button
+        ReconstruccinSealPanel          matlab.ui.container.Panel
+        SelectorGraficaReconstruccion   matlab.ui.control.DropDown
+        GraficarReconstruccionButton    matlab.ui.control.Button
+        CuantizacinPanel                matlab.ui.container.Panel
+        SelectorGraficaCuantizacion     matlab.ui.control.DropDown
+        GraficarCuantizacionButton      matlab.ui.control.Button
+        SelectorNumBits                 matlab.ui.control.DropDown
+        NumBitsDropDownLabel            matlab.ui.control.Label
+        CodificacinPanel                matlab.ui.container.Panel
+        SelectorGraficaCodificacion     matlab.ui.control.DropDown
+        GraficarCodificacionButton      matlab.ui.control.Button
+        CanalAWGNPanel                  matlab.ui.container.Panel
+        SelectorGraficaCanal            matlab.ui.control.DropDown
+        GraficarCanalButton             matlab.ui.control.Button
+        dBLabel                         matlab.ui.control.Label
+        SelectorSNR                     matlab.ui.control.DropDown
+        SNRDropDownLabel                matlab.ui.control.Label
+        MuestreoPanel                   matlab.ui.container.Panel
+        SelectorGraficaMuestreo         matlab.ui.control.DropDown
+        GraficarMuestreoButton          matlab.ui.control.Button
+        KHzLabel                        matlab.ui.control.Label
+        SelectorFs                      matlab.ui.control.DropDown
+        FsDropDownLabel                 matlab.ui.control.Label
+        Filtropasabajos4KHzPanel        matlab.ui.container.Panel
+        GraficarFiltroButton            matlab.ui.control.Button
+        SealdeEntradaPanel              matlab.ui.container.Panel
+        SelectorGraficaSenalEntrada     matlab.ui.control.DropDown
+        SelectorAudio                   matlab.ui.control.DropDown
+        GraficarSenalEntradaButton      matlab.ui.control.Button
+        GrabarSenalEntradaButton        matlab.ui.control.Button
+        CargarAudioButton               matlab.ui.control.Button
+        DigitalizacintransmisinyrecepcindeunasealdevozLabel  matlab.ui.control.Label
+        ComunicacionesElectrnicasLabel  matlab.ui.control.Label
+        AsignaturaLabel                 matlab.ui.control.Label
+        JuanCamiloVelsquezMicoltaLabel  matlab.ui.control.Label
+        ProfesorLabel                   matlab.ui.control.Label
+        SergioMontenegrovilaLabel       matlab.ui.control.Label
+        SebastianHenaoValenciaLabel     matlab.ui.control.Label
+        SantiagoLoaizaSanchezLabel      matlab.ui.control.Label
+        IntegrantesLabel                matlab.ui.control.Label
+        UniversidadAutnomadeManizalesLabel  matlab.ui.control.Label
+        UIAxes2                         matlab.ui.control.UIAxes
+        UIAxes                          matlab.ui.control.UIAxes
+    end
+
+    properties (Access = private)
+    % Variables internas de procesamiento de señal
+    senal1 double                    % Señal original
+    senal_filtrada double           % Señal después del filtro pasa bajos
+    fs1 double                      % Frecuencia de muestreo original
+    fs double                       % Frecuencia de muestreo seleccionada
+    t double                        % Vector de tiempo
+    senal double
+    senal_out double
+    senal_muestreada double        % Señal después del muestreo
+    senal_cuant double             % Señal cuantizada
+    senal_nrz double   % Señal codificada en línea NRZ bipolar
+    del double                      % Paso de cuantización
+    vmax double                     % Valor máximo de cuantización
+    vmin double                     % Valor mínimo de cuantizació
+    numbits double                  % Número de bits para cuantización
+    senal_binario string            % Cadena binaria de la señal codificada
+    rxSig1 double                   % Señal recibida (decodificada)
+    rxSig2 double                   % Señal reconstruida
+    index double                    % Índice auxiliar (si es para reconstrucción, decodificación u otra operación)
+    t_grab double
+    
+    end
+
+    % Callbacks that handle component events
+    methods (Access = private)
+
+        % Button pushed function: CargarAudioButton
+        function CargarAudioButtonPushed(comp, event)
+            [file,path] = uigetfile('*.wav');
+            if isequal(file,0), return; end
+            [comp.senal1, comp.fs1] = audioread(fullfile(path,file));
+            comp.t_grab = length(comp.senal1) / comp.fs1;           
+        end
+
+        % Button pushed function: GrabarSenalEntradaButton
+        function GrabarSenalEntradaButtonPushed(comp, event)
+             try
+                info = audiodevinfo;
+                disp('Dispositivos de entrada:')
+                for k = 1:length(info.input)
+                    fprintf('ID #%d - %s\n', info.input(k).ID, info.input(k).Name)
+                end
+        
+                % Obtener valor del selector de duración
+                tiempo_str = comp.SelectorAudio.Value;
+                comp.t_grab = str2double(tiempo_str);
+        
+                % Parámetros de grabación: se usan 2 canales por compatibilidad
+                comp.fs1 = 8000;
+                rec = audiorecorder(comp.fs1, 8, 2, 1);  % 8 bits, 2 canales, ID de micrófono válido
+        
+                % Grabar
+                disp("Empieza la grabación...");
+                recordblocking(rec, comp.t_grab);
+                disp("Termina la grabación.");
+        
+                % Obtener y usar solo un canal
+                senal_estereo = getaudiodata(rec);
+                comp.senal1 = senal_estereo(:,1);  % Canal izquierdo
+        
+                % Verificación
+                disp("Valor máximo grabado:");
+                disp(max(abs(comp.senal1)))
+                disp(comp.senal1(1:10))
+        
+                % Graficar en interfaz
+                eje = str2double(comp.SelectorGraficaSenalEntrada.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+                cla(axesArray(eje));
+                plot(axesArray(eje), comp.senal1);
+                title(axesArray(eje), 'Señal grabada');
+                xlabel(axesArray(eje), 'Índice de muestra');
+                ylabel(axesArray(eje), 'Amplitud');
+                ylim(axesArray(eje), [-1 1]);
+                grid(axesArray(eje), 'on');
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error durante la grabación: ' ME.message], 'Error');
+            end           
+        end
+
+        % Button pushed function: GraficarSenalEntradaButton
+        function GraficarSenalEntradaButtonPushed(comp, event)
+            eje = str2double(comp.SelectorGraficaSenalEntrada.Value);
+            axesArray = [comp.UIAxes, comp.UIAxes2];
+        
+            % Calcular eje de tiempo si es posible
+            if ~isempty(comp.senal1) && ~isempty(comp.fs1)
+                t = (0:length(comp.senal1)-1) / comp.fs1;
+                plot(axesArray(eje), t, comp.senal1);
+                xlabel(axesArray(eje), 'Tiempo (s)');
+                ylabel(axesArray(eje), 'Amplitud');
+                title(axesArray(eje), 'Señal de Entrada (Audio Original)');
+                grid on;
+            else
+                fig = ancestor(comp, 'figure');
+                uialert(fig, 'No se ha cargado ni grabado ninguna señal.', 'Error');
+            end             
+        end
+
+        % Button pushed function: GraficarFiltroButton
+        function GraficarFiltroButtonPushed(comp, event)
+            fs = comp.fs1;
+            fc = 3990;  % Frecuencia de corte del filtro en Hz
+        
+            % Diseño del filtro pasabajos FIR
+            d = designfilt('lowpassfir', ...
+                'PassbandFrequency', fc, ...
+                'StopbandFrequency', fc + 300, ...
+                'PassbandRipple', 1, ...
+                'StopbandAttenuation', 80, ...
+                'SampleRate', fs);
+        
+            % Aplicar filtro a la señal de entrada
+            comp.senal_filtrada = filter(d, comp.senal1);
+        
+            % Gráficas: tiempo y frecuencia
+            t = (0:length(comp.senal1)-1)/fs;
+        
+            figure('Name', 'Filtro Pasabajos 4kHz', 'NumberTitle', 'off');
+        
+            % Gráfica en el dominio del tiempo
+            subplot(2,1,1);
+            plot(t, comp.senal1, 'b', 'DisplayName', 'Original'); hold on;
+            plot(t, comp.senal_filtrada, 'r', 'DisplayName', 'Filtrada');
+            title('Señal original vs filtrada en el tiempo');
+            xlabel('Tiempo (s)');
+            ylabel('Amplitud');
+            legend(); grid on;
+        
+            % Espectro de frecuencia
+            N = length(comp.senal1);
+            f = linspace(0, fs/2, floor(N/2)+1);
+        
+            X = fft(comp.senal1); X = X(1:length(f)); PX = 20*log10(abs(X));
+            Y = fft(comp.senal_filtrada); Y = Y(1:length(f)); PY = 20*log10(abs(Y));
+        
+            subplot(2,1,2);
+            plot(f/1000, PX, 'b', 'DisplayName','Original'); hold on;
+            plot(f/1000, PY, 'r', 'DisplayName','Filtrada');
+            xlabel('Frecuencia (kHz)');
+            ylabel('Espectro (dB)');
+            title('Espectro de potencia de la señal');
+            xlim([0 5]); legend(); grid on;
+        end
+
+        % Button pushed function: GraficarMuestreoButton
+        function GraficarMuestreoButtonPushed(comp, event)
+             try
+                % Obtener frecuencia de muestreo seleccionada
+                comp.fs = str2double(comp.SelectorFs.Value) * 1000;
+        
+                % Validar que haya señal filtrada
+                if isempty(comp.senal_filtrada) || isempty(comp.fs1)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Debe aplicar primero el filtro pasa bajos.', 'Error');
+                    return;
+                end
+        
+                % Aplicar remuestreo real: de fs1 a fs
+                comp.senal = resample(comp.senal_filtrada, comp.fs, comp.fs1);
+        
+                % Nuevo eje temporal
+                ts = 1 / comp.fs;
+                comp.t = 0:ts:(length(comp.senal)-1)*ts;
+        
+                % Graficar la señal muestreada
+                eje = str2double(comp.SelectorGraficaMuestreo.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+                
+                stem(axesArray(eje), comp.t, comp.senal, 'Marker', '.', 'MarkerSize', 2);
+                %stem(axesArray(eje), comp.t, comp.senal, 'filled');
+                title(axesArray(eje), sprintf('Señal muestreada a %d Hz', comp.fs));
+                xlabel(axesArray(eje), 'Tiempo (s)');
+                ylabel(axesArray(eje), 'Amplitud');
+                grid on;
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error al graficar muestreo: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: GraficarCanalButton
+        function GraficarCanalButtonPushed(comp, event)
+            try
+                if isempty(comp.senal_binario)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Primero debe codificar la señal.', 'Error');
+                    return;
+                end
+        
+                % Obtener SNR seleccionado
+                SNR = str2double(comp.SelectorSNR.Value);
+                if isnan(SNR)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Ingrese un valor numérico válido para el SNR.', 'Error');
+                    return;
+                end
+        
+                % Señal binaria
+                senal_bin = double(comp.senal_binario);
+        
+                % Añadir ruido AWGN
+                comp.rxSig1 = awgn(senal_bin, SNR, 'measured');
+        
+                % Fragmento a graficar
+                N = 500;
+                N = min(N, length(comp.rxSig1)); % Por si la señal es más corta
+                frag_ruido = comp.rxSig1(1:N);
+                frag_original = senal_bin(1:N);
+        
+                % Graficar fragmento en UIAxes/UIAxes2
+                eje = str2double(comp.SelectorGraficaCanal.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+
+                reset(axesArray(eje));  % Limpia el contenido anterior y resetea límites de ejes
+
+                plot(axesArray(eje), frag_ruido);
+                title(axesArray(eje), sprintf('Fragmento de la señal en el canal AWGN (SNR = %d dB)', SNR));
+                xlabel(axesArray(eje), 'Índice');
+                ylabel(axesArray(eje), 'Amplitud');
+                ylim([-0.5 1.5]);
+        
+                % Gráfica comparativa adicional
+                figure('Name', 'Comparación señal original vs señal con ruido', 'NumberTitle', 'off');
+        
+                subplot(2,1,1);
+                stairs(frag_original, 'LineWidth', 1.2);
+                title('Señal original (sin ruido)');
+                xlabel('Índice');
+                ylabel('Bit');
+                ylim([-0.5 1.5]);
+                grid on;
+        
+                subplot(2,1,2);
+                plot(frag_ruido, 'LineWidth', 1.2);
+                title(sprintf('Señal con ruido AWGN (SNR = %d dB)', SNR));
+                xlabel('Índice');
+                ylabel('Amplitud');
+                ylim([-0.5 1.5]);
+                grid on;
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Ocurrió un error: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: GraficarCodificacionButton
+        function GraficarCodificacionButtonPushed(comp, event)
+            try
+                % Verificar que haya señal cuantificada
+                if isempty(comp.senal_cuant)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Debe cuantificar la señal antes de codificarla.', 'Error');
+                    return;
+                end
+        
+                % Leer número de bits
+                comp.numbits = str2double(comp.SelectorNumBits.Value);
+        
+                % Calcular los índices desde la señal cuantificada
+                indices = round((comp.senal_cuant - comp.vmin - (comp.del / 2)) / comp.del);
+        
+                % Limitar los índices al rango válido
+                indices(indices < 0) = 0;
+                indices(indices > 2^comp.numbits - 1) = 2^comp.numbits - 1;
+        
+                % Asegurar que los índices sean vector columna
+                indices = indices(:);
+        
+                % Codificación binaria (matriz NxBits)
+                bina = de2bi(indices, comp.numbits, 'left-msb');
+        
+                % Convertir a vector binario plano
+                comp.senal_binario = reshape(bina.', 1, []);
+        
+                % Convertir señal binaria a tipo double
+                senal_bin = double(comp.senal_binario);
+                L = length(senal_bin);
+                
+                % Tomar un fragmento centrado en 25% del total
+                tamano_fragmento = 100;
+                centro = round(L * 0.25);
+                inicio = max(1, centro - floor(tamano_fragmento/2));
+                fin = min(L, inicio + tamano_fragmento - 1);
+                fragmento = senal_bin(inicio:fin);
+                
+                % Simular tiempo con eje X tipo decimal
+                tiempo = linspace(inicio, fin, length(fragmento));
+                
+                % Seleccionar eje
+                eje = str2double(comp.SelectorGraficaCodificacion.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+                
+                % Graficar
+                stairs(axesArray(eje), tiempo, fragmento, 'LineWidth', 1.5);
+                title(axesArray(eje), sprintf('Fragmento de la señal codificada (%d bits)', comp.numbits));
+                xlabel(axesArray(eje), 'Índice');
+                ylabel(axesArray(eje), 'Bit');
+                ylim(axesArray(eje), [-1, 2]);  % Forzar eje Y correcto
+                xlim(axesArray(eje), [min(tiempo), max(tiempo)]);
+                grid(axesArray(eje), 'on');
+
+
+
+
+                % -------------------------------
+                % Codificación de línea: NRZ Bipolar
+                % -------------------------------
+                binario = double(comp.senal_binario);
+                % ------------------------------------------
+                senal_nrz = zeros(1, length(binario));
+                polaridad = 1;
+                
+                for k = 1:length(binario)
+                    if binario(k) == 1
+                        senal_nrz(k) = polaridad;
+                        polaridad = -polaridad;  % alterna entre +1 y -1
+                    else
+                        senal_nrz(k) = 0;
+                    end
+                end
+                
+                % Guardar para futuras etapas si se requiere
+                comp.senal_nrz = senal_nrz;
+                
+                % Generar eje temporal (opcional: 1 unidad por bit)
+                tiempo = 1:length(senal_nrz);
+                
+                % -------------------------------
+                % Figura emergente: fragmento + ojo
+                % -------------------------------
+                num_muestras_a_mostrar = min(1000, length(senal_nrz));
+                senal_fragmento = senal_nrz(1:num_muestras_a_mostrar);
+                tiempo_fragmento = tiempo(1:num_muestras_a_mostrar);
+                
+                % Graficar fragmento
+                figure('Name', 'Codificación NRZ Bipolar - Fragmento y Diagrama de Ojo', 'NumberTitle', 'off');
+                stairs(tiempo_fragmento, senal_fragmento, 'LineWidth', 1.5);
+                xlabel('Tiempo (bits)');
+                ylabel('Amplitud');
+                title('Fragmento de la señal codificada NRZ Bipolar');
+                xlim([0, 50]);
+                ylim([-1.5, 1.5]);
+                grid on;
+                
+                % -------------------------------
+                % Diagrama de ojo realista (fragmento interpolado)
+                % -------------------------------
+                samples_per_bit = 20;  % número de muestras por bit
+                fragmento_para_ojos = senal_nrz(1:100);  % solo 100 bits
+                
+                % Interpolar solo el fragmento
+                senal_interp = repelem(fragmento_para_ojos, samples_per_bit);
+                
+                % Crear diagrama de ojo
+                
+                figure('Name','Eye Diagram - NRZ Bipolar','NumberTitle','off');
+                eyediagram(senal_interp, 2 * samples_per_bit);
+                title('Diagrama de ojo - NRZ Bipolar');
+
+                %% -------------------------------
+                % Diagrama de ojo - Señal Conformada (Raised Cosine)
+                % -------------------------------
+                rolloff = 0.75;
+                samples_per_symbol = 20;
+                span = 6;
+                
+                % Filtro Raised Cosine
+                rcFilter = rcosdesign(rolloff, span, samples_per_symbol, 'normal');
+                
+                % Usar una porción más larga de la señal NRZ para obtener variedad de patrones
+                nrz_fragmento = comp.senal_nrz(1:min(2000, length(comp.senal_nrz)));
+                
+                % Interpolar (upsample) la señal binaria
+                senal_upsampled = upsample(nrz_fragmento, samples_per_symbol);
+                
+                % Aplicar el filtro (conformado de pulso)
+                senal_conformada = conv(senal_upsampled, rcFilter, 'same');
+                
+                % Normalizar amplitud para mejor visualización
+                senal_conformada = senal_conformada / max(abs(senal_conformada));
+                
+                % Mostrar diagrama de ojo
+                figure('Name','Eye Diagram - Señal Conformada','NumberTitle','off');
+                eyediagram(senal_conformada, 2 * samples_per_symbol);
+                title(sprintf('Diagrama de Ojo - Señal Conformada (roll-off = %.2f)', rolloff));
+
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Ocurrió un error durante la codificación: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: GraficarCuantizacionButton
+        function GraficarCuantizacionButtonPushed(comp, event)
+             try
+                % Validar señal de entrada
+                if isempty(comp.senal)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Debe realizar el muestreo antes de cuantificar.', 'Error');
+                    return;
+                end
+        
+                % Leer número de bits
+                comp.numbits = str2double(comp.SelectorNumBits.Value);
+        
+                % Parámetros de cuantización
+                comp.vmin = -1;
+                comp.vmax = 1;
+                comp.del = (comp.vmax - comp.vmin) / (2^comp.numbits);
+        
+                % Definir puntos de partición y niveles
+                part = comp.vmin : comp.del : comp.vmax - comp.del;
+                code = comp.vmin + comp.del/2 : comp.del : comp.vmax - comp.del/2;
+        
+                % Cuantización: obtener índices
+                indices = quantiz(comp.senal, part, code);
+                if isempty(indices)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Error: la cuantización no generó salida válida.', 'Error');
+                    return;
+                end
+        
+                % Verificar índices válidos
+                indices(indices < 1) = 1;
+                indices(indices > length(code)) = length(code);
+        
+                % Obtener la señal cuantizada
+                comp.senal_cuant = code(indices);
+                senal_lineal_rec = comp.senal_cuant;
+        
+                % -------- Gráfica ilustrativa con índices de cuantización --------
+                eje = str2double(comp.SelectorGraficaCuantizacion.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+                reset(axesArray(eje));
+        
+                stairs(axesArray(eje), 1:length(indices), indices - 1, 'LineWidth', 1.2);
+                title(axesArray(eje), sprintf('Índices de cuantización (%d bits)', comp.numbits));
+                xlabel(axesArray(eje), 'Índice de muestra');
+                ylabel(axesArray(eje), 'Nivel cuantizado');
+                ylim(axesArray(eje), [-10, 2^comp.numbits + 10]);
+                grid(axesArray(eje), 'on');
+        
+                % -------- Error de cuantización --------
+                error_lineal = comp.senal(:) - senal_lineal_rec(:);
+        
+                % Validaciones
+                assert(all(size(error_lineal) == size(comp.senal)), 'Error: tamaños no coinciden');
+                assert(~any(isnan(error_lineal)), 'Error: el error contiene NaN');
+                assert(~any(isinf(error_lineal)), 'Error: el error contiene Inf');
+        
+                % -------- Gráfica del error en nueva ventana --------
+                figure('Name','Error de cuantización lineal','NumberTitle','off');
+                plot(error_lineal, 'b');
+                title(sprintf('Error de cuantización lineal (%d bits)', comp.numbits));
+                xlabel('Índice de muestra');
+                ylabel('Error');
+                grid on;              
+                
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error en la cuantización: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: GraficarReconstruccionButton
+        function GraficarReconstruccionButtonPushed(comp, event)
+            try
+                if isempty(comp.rxSig1)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Debe pasar la señal por el canal antes de reconstruir.', 'Error');
+                    return;
+                end
+        
+                % Reconstrucción por decisión dura
+                comp.rxSig2 = comp.rxSig1 > 0.5;
+        
+                % Fragmento centrado en 25% del total
+                L = length(comp.rxSig2);
+                tamano_fragmento = 100;
+                centro = round(L * 0.25);
+                inicio = max(1, centro - floor(tamano_fragmento/2));
+                fin = min(L, inicio + tamano_fragmento - 1);
+                fragmento = comp.rxSig2(inicio:fin);
+        
+                tiempo = linspace(inicio, fin, length(fragmento));
+        
+                % Graficar
+                eje = str2double(comp.SelectorGraficaReconstruccion.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+                reset(axesArray(eje));
+
+                stairs(axesArray(eje), tiempo, double(fragmento), 'LineWidth', 1.5);
+                title(axesArray(eje), 'Reconstrucción de la señal (decisión dura)');
+                xlabel(axesArray(eje), 'Índice');
+                ylabel(axesArray(eje), 'Bit');
+                ylim(axesArray(eje), [-1, 2]);
+                xlim(axesArray(eje), [min(tiempo), max(tiempo)]);
+                grid(axesArray(eje), 'on');
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error en la reconstrucción: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: GraficarDecodificacionButton
+        function GraficarDecodificacionButtonPushed(comp, event)
+            try
+                nbits = str2double(comp.SelectorNumBits.Value);
+        
+                if isempty(comp.rxSig2)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'No se ha recibido la señal decodificada. Verifique el flujo anterior.', 'Error');
+                    return;
+                end
+        
+                % Reconstrucción binaria
+                comp.rxSig2 = comp.rxSig2 > 0.5;
+        
+                % Truncar para asegurar divisibilidad por nbits
+                len = floor(length(comp.rxSig2) / nbits) * nbits;
+                recortada = comp.rxSig2(1:len);
+        
+                % Conversión binario → decimal (índices cuantizados)
+                qunt = reshape(recortada, nbits, []);
+                comp.index = bi2de(qunt', 'left-msb');
+        
+                % Parámetros para selección del fragmento
+                tamano_fragmento = 500;
+                ventana_movil = movstd(double(comp.index), 50);
+                [~, centro] = max(ventana_movil);  % zona con más variabilidad
+        
+                inicio = max(1, centro - floor(tamano_fragmento / 2));
+                fin = min(length(comp.index), inicio + tamano_fragmento - 1);
+                fragmento = comp.index(inicio:fin);
+                tiempo = linspace(inicio, fin, length(fragmento));
+        
+                % Gráfica en eje de la interfaz
+                eje = str2double(comp.SelectorGraficaDecodificacion.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+        
+                reset(axesArray(eje));  % Limpiar eje
+        
+                stairs(axesArray(eje), tiempo, fragmento, 'LineWidth', 1.5);
+                title(axesArray(eje), 'Secuencia de índices decodificados');
+                xlabel(axesArray(eje), 'Índice');
+                ylabel(axesArray(eje), 'Nivel cuantizado');
+                ylim(axesArray(eje), [-1, 2^nbits]);
+                xlim(axesArray(eje), [min(tiempo), max(tiempo)]);
+                grid(axesArray(eje), 'on');
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error en la decodificación: ' ME.message], 'Error');
+            end         
+        end
+
+        % Button pushed function: GraficarSenalRecibidaButton
+        function GraficarSenalRecibidaButtonPushed(comp, event)
+            try
+                if isempty(comp.index)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, 'Debe decodificar la señal antes de reconstruir la salida.', 'Error');
+                    return;
+                end
+        
+                % Recuperar parámetros
+                comp.numbits = str2double(comp.SelectorNumBits.Value);
+                comp.del = (comp.vmax - comp.vmin) / (2^comp.numbits);
+        
+                % Decuantización: reconstrucción de amplitud
+                comp.senal_out = comp.del * comp.index + comp.vmin + (comp.del / 2);
+        
+                % Graficar señal completa
+                eje = str2double(comp.SelectorGraficaSenalRecibida.Value);
+                axesArray = [comp.UIAxes, comp.UIAxes2];
+
+                reset(axesArray(eje));
+
+                plot(axesArray(eje), comp.senal_out, 'LineWidth', 1.2);
+                title(axesArray(eje), 'Señal recibida (completa)');
+                xlabel(axesArray(eje), 'Índice');
+                ylabel(axesArray(eje), 'Amplitud');
+                grid on;
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error al graficar la señal recibida: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: ReproduciraudioenviadoButton
+        function ReproduciraudioenviadoButtonPushed(comp, event)
+            try
+                if ~isempty(comp.senal1) && ~isempty(comp.fs1)
+                    sound(comp.senal1, comp.fs1);
+                else
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, "No hay audio grabado o cargado para reproducir.", "Error");
+                end
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error al reproducir el audio original: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: RepetirButton
+        function RepetirButtonPushed(comp, event)
+            try
+                % Borrar todas las variables internas
+                comp.senal1 = [];
+                comp.senal_filtrada = [];
+                comp.senal = [];
+                comp.senal_muestreada = [];
+                comp.senal_cuant = [];
+                comp.senal_binario = "";
+                comp.rxSig1 = [];
+                comp.rxSig2 = [];
+                comp.index = [];
+                comp.senal_out = [];
+        
+                comp.fs1 = [];
+                comp.fs = [];
+                comp.t = [];
+                comp.t_grab = [];
+                comp.del = [];
+                comp.numbits = [];
+                comp.vmax = [];
+                comp.vmin = [];
+        
+                % Limpiar gráficas
+                cla(comp.UIAxes);
+                cla(comp.UIAxes2);
+        
+                % Mensaje opcional en consola
+                disp("Aplicación reiniciada correctamente.");
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error al reiniciar: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: ReproduciraudiorecibidoButton
+        function ReproduciraudiorecibidoButtonPushed(comp, event)
+            try
+                if isempty(comp.senal_out) || isempty(comp.fs)
+                    fig = ancestor(comp, 'figure');
+                    uialert(fig, ['No hay señal reconstruida o la frecuencia ' ...
+                        'de muestreo no está definida.'], 'Error');
+                    return;
+                end
+        
+                sound(comp.senal_out, comp.fs);
+        
+            catch ME
+                fig = ancestor(comp, 'figure');
+                uialert(fig, ['Error al reproducir la señal ' ...
+                    'recibida: ' ME.message], 'Error');
+            end
+        end
+
+        % Button pushed function: SalirButton
+        function SalirButtonPushed(comp, event)
+            close all;
+        end
+    end
+
+    methods (Access = protected)
+        
+        % Code that executes when the value of a public property is changed
+        function update(comp)
+            % Use this function to update the underlying components
+            
+        end
+
+        % Create the underlying components
+        function setup(comp)
+
+            comp.Position = [1 1 918 598];
+            comp.BackgroundColor = [0.94 0.94 0.94];
+
+            % Create UIAxes
+            comp.UIAxes = uiaxes(comp);
+            title(comp.UIAxes, 'Title')
+            xlabel(comp.UIAxes, 'X')
+            ylabel(comp.UIAxes, 'Y')
+            zlabel(comp.UIAxes, 'Z')
+            comp.UIAxes.Position = [580 257 327 212];
+
+            % Create UIAxes2
+            comp.UIAxes2 = uiaxes(comp);
+            title(comp.UIAxes2, 'Title')
+            xlabel(comp.UIAxes2, 'X')
+            ylabel(comp.UIAxes2, 'Y')
+            zlabel(comp.UIAxes2, 'Z')
+            comp.UIAxes2.Position = [580 42 328 200];
+
+            % Create UniversidadAutnomadeManizalesLabel
+            comp.UniversidadAutnomadeManizalesLabel = uilabel(comp);
+            comp.UniversidadAutnomadeManizalesLabel.FontSize = 24;
+            comp.UniversidadAutnomadeManizalesLabel.FontWeight = 'bold';
+            comp.UniversidadAutnomadeManizalesLabel.Position = [217 556 430 31];
+            comp.UniversidadAutnomadeManizalesLabel.Text = 'Universidad Autónoma de Manizales';
+
+            % Create IntegrantesLabel
+            comp.IntegrantesLabel = uilabel(comp);
+            comp.IntegrantesLabel.FontWeight = 'bold';
+            comp.IntegrantesLabel.Position = [25 527 74 22];
+            comp.IntegrantesLabel.Text = 'Integrantes:';
+
+            % Create SantiagoLoaizaSanchezLabel
+            comp.SantiagoLoaizaSanchezLabel = uilabel(comp);
+            comp.SantiagoLoaizaSanchezLabel.Position = [101 532 141 17];
+            comp.SantiagoLoaizaSanchezLabel.Text = 'Santiago Loaiza Sanchez';
+
+            % Create SebastianHenaoValenciaLabel
+            comp.SebastianHenaoValenciaLabel = uilabel(comp);
+            comp.SebastianHenaoValenciaLabel.Position = [102 518 146 22];
+            comp.SebastianHenaoValenciaLabel.Text = 'Sebastian Henao Valencia';
+
+            % Create SergioMontenegrovilaLabel
+            comp.SergioMontenegrovilaLabel = uilabel(comp);
+            comp.SergioMontenegrovilaLabel.Position = [102 506 141 22];
+            comp.SergioMontenegrovilaLabel.Text = 'Sergio Montenegro Ávila';
+
+            % Create ProfesorLabel
+            comp.ProfesorLabel = uilabel(comp);
+            comp.ProfesorLabel.FontWeight = 'bold';
+            comp.ProfesorLabel.Position = [312 527 59 22];
+            comp.ProfesorLabel.Text = 'Profesor:';
+
+            % Create JuanCamiloVelsquezMicoltaLabel
+            comp.JuanCamiloVelsquezMicoltaLabel = uilabel(comp);
+            comp.JuanCamiloVelsquezMicoltaLabel.Position = [370 529 171 22];
+            comp.JuanCamiloVelsquezMicoltaLabel.Text = 'Juan Camilo Velásquez Micolta';
+
+            % Create AsignaturaLabel
+            comp.AsignaturaLabel = uilabel(comp);
+            comp.AsignaturaLabel.FontWeight = 'bold';
+            comp.AsignaturaLabel.Position = [601 527 71 22];
+            comp.AsignaturaLabel.Text = 'Asignatura:';
+
+            % Create ComunicacionesElectrnicasLabel
+            comp.ComunicacionesElectrnicasLabel = uilabel(comp);
+            comp.ComunicacionesElectrnicasLabel.Position = [672 527 163 22];
+            comp.ComunicacionesElectrnicasLabel.Text = 'Comunicaciones Electrónicas';
+
+            % Create DigitalizacintransmisinyrecepcindeunasealdevozLabel
+            comp.DigitalizacintransmisinyrecepcindeunasealdevozLabel = uilabel(comp);
+            comp.DigitalizacintransmisinyrecepcindeunasealdevozLabel.FontSize = 24;
+            comp.DigitalizacintransmisinyrecepcindeunasealdevozLabel.FontWeight = 'bold';
+            comp.DigitalizacintransmisinyrecepcindeunasealdevozLabel.Position = [26 468 698 31];
+            comp.DigitalizacintransmisinyrecepcindeunasealdevozLabel.Text = 'Digitalización, transmisión y recepción de una señal de voz';
+
+            % Create SealdeEntradaPanel
+            comp.SealdeEntradaPanel = uipanel(comp);
+            comp.SealdeEntradaPanel.Title = '1. Señal de Entrada';
+            comp.SealdeEntradaPanel.Position = [26 333 149 122];
+
+            % Create CargarAudioButton
+            comp.CargarAudioButton = uibutton(comp.SealdeEntradaPanel, 'push');
+            comp.CargarAudioButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @CargarAudioButtonPushed, true);
+            comp.CargarAudioButton.Position = [21 72 100 23];
+            comp.CargarAudioButton.Text = 'Cargar Audio';
+
+            % Create GrabarSenalEntradaButton
+            comp.GrabarSenalEntradaButton = uibutton(comp.SealdeEntradaPanel, 'push');
+            comp.GrabarSenalEntradaButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GrabarSenalEntradaButtonPushed, true);
+            comp.GrabarSenalEntradaButton.Position = [12 41 50 23];
+            comp.GrabarSenalEntradaButton.Text = 'Grabar';
+
+            % Create GraficarSenalEntradaButton
+            comp.GraficarSenalEntradaButton = uibutton(comp.SealdeEntradaPanel, 'push');
+            comp.GraficarSenalEntradaButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarSenalEntradaButtonPushed, true);
+            comp.GraficarSenalEntradaButton.Position = [12 10 74 23];
+            comp.GraficarSenalEntradaButton.Text = 'Graficar en';
+
+            % Create SelectorAudio
+            comp.SelectorAudio = uidropdown(comp.SealdeEntradaPanel);
+            comp.SelectorAudio.Items = {'1', '2', '3', '4', '5'};
+            comp.SelectorAudio.Position = [73 41 38 22];
+            comp.SelectorAudio.Value = '1';
+
+            % Create SelectorGraficaSenalEntrada
+            comp.SelectorGraficaSenalEntrada = uidropdown(comp.SealdeEntradaPanel);
+            comp.SelectorGraficaSenalEntrada.Items = {'1', '2'};
+            comp.SelectorGraficaSenalEntrada.Position = [101 9 41 22];
+            comp.SelectorGraficaSenalEntrada.Value = '1';
+
+            % Create Filtropasabajos4KHzPanel
+            comp.Filtropasabajos4KHzPanel = uipanel(comp);
+            comp.Filtropasabajos4KHzPanel.Title = '2. Filtro pasabajos 4KHz';
+            comp.Filtropasabajos4KHzPanel.Position = [222 364 139 91];
+
+            % Create GraficarFiltroButton
+            comp.GraficarFiltroButton = uibutton(comp.Filtropasabajos4KHzPanel, 'push');
+            comp.GraficarFiltroButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarFiltroButtonPushed, true);
+            comp.GraficarFiltroButton.Position = [26 32 78 23];
+            comp.GraficarFiltroButton.Text = 'Graficar';
+
+            % Create MuestreoPanel
+            comp.MuestreoPanel = uipanel(comp);
+            comp.MuestreoPanel.Title = '3. Muestreo';
+            comp.MuestreoPanel.Position = [413 354 138 101];
+
+            % Create FsDropDownLabel
+            comp.FsDropDownLabel = uilabel(comp.MuestreoPanel);
+            comp.FsDropDownLabel.HorizontalAlignment = 'right';
+            comp.FsDropDownLabel.Position = [1 44 25 22];
+            comp.FsDropDownLabel.Text = 'Fs';
+
+            % Create SelectorFs
+            comp.SelectorFs = uidropdown(comp.MuestreoPanel);
+            comp.SelectorFs.Items = {'4', '8', '12'};
+            comp.SelectorFs.Position = [41 44 44 22];
+            comp.SelectorFs.Value = '8';
+
+            % Create KHzLabel
+            comp.KHzLabel = uilabel(comp.MuestreoPanel);
+            comp.KHzLabel.Position = [101 44 27 22];
+            comp.KHzLabel.Text = 'KHz';
+
+            % Create GraficarMuestreoButton
+            comp.GraficarMuestreoButton = uibutton(comp.MuestreoPanel, 'push');
+            comp.GraficarMuestreoButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarMuestreoButtonPushed, true);
+            comp.GraficarMuestreoButton.Position = [6 11 74 23];
+            comp.GraficarMuestreoButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaMuestreo
+            comp.SelectorGraficaMuestreo = uidropdown(comp.MuestreoPanel);
+            comp.SelectorGraficaMuestreo.Items = {'1', '2'};
+            comp.SelectorGraficaMuestreo.Position = [89 10 39 22];
+            comp.SelectorGraficaMuestreo.Value = '1';
+
+            % Create CanalAWGNPanel
+            comp.CanalAWGNPanel = uipanel(comp);
+            comp.CanalAWGNPanel.Title = '6. Canal AWGN';
+            comp.CanalAWGNPanel.Position = [26 229 141 90];
+
+            % Create SNRDropDownLabel
+            comp.SNRDropDownLabel = uilabel(comp.CanalAWGNPanel);
+            comp.SNRDropDownLabel.HorizontalAlignment = 'right';
+            comp.SNRDropDownLabel.Position = [16 36 31 22];
+            comp.SNRDropDownLabel.Text = 'SNR';
+
+            % Create SelectorSNR
+            comp.SelectorSNR = uidropdown(comp.CanalAWGNPanel);
+            comp.SelectorSNR.Items = {'0', '5', '10', '15', '20', '30'};
+            comp.SelectorSNR.Position = [62 36 49 22];
+            comp.SelectorSNR.Value = '30';
+
+            % Create dBLabel
+            comp.dBLabel = uilabel(comp.CanalAWGNPanel);
+            comp.dBLabel.Position = [117 36 25 22];
+            comp.dBLabel.Text = 'dB';
+
+            % Create GraficarCanalButton
+            comp.GraficarCanalButton = uibutton(comp.CanalAWGNPanel, 'push');
+            comp.GraficarCanalButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarCanalButtonPushed, true);
+            comp.GraficarCanalButton.Position = [7 9 79 23];
+            comp.GraficarCanalButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaCanal
+            comp.SelectorGraficaCanal = uidropdown(comp.CanalAWGNPanel);
+            comp.SelectorGraficaCanal.Items = {'1', '2'};
+            comp.SelectorGraficaCanal.Position = [93 9 42 22];
+            comp.SelectorGraficaCanal.Value = '2';
+
+            % Create CodificacinPanel
+            comp.CodificacinPanel = uipanel(comp);
+            comp.CodificacinPanel.Title = '5. Codificación';
+            comp.CodificacinPanel.Position = [218 229 143 90];
+
+            % Create GraficarCodificacionButton
+            comp.GraficarCodificacionButton = uibutton(comp.CodificacinPanel, 'push');
+            comp.GraficarCodificacionButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarCodificacionButtonPushed, true);
+            comp.GraficarCodificacionButton.Position = [15 30 69 23];
+            comp.GraficarCodificacionButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaCodificacion
+            comp.SelectorGraficaCodificacion = uidropdown(comp.CodificacinPanel);
+            comp.SelectorGraficaCodificacion.Items = {'1', '2'};
+            comp.SelectorGraficaCodificacion.Position = [95 30 44 22];
+            comp.SelectorGraficaCodificacion.Value = '1';
+
+            % Create CuantizacinPanel
+            comp.CuantizacinPanel = uipanel(comp);
+            comp.CuantizacinPanel.Title = '4. Cuantización';
+            comp.CuantizacinPanel.Position = [413 229 138 90];
+
+            % Create NumBitsDropDownLabel
+            comp.NumBitsDropDownLabel = uilabel(comp.CuantizacinPanel);
+            comp.NumBitsDropDownLabel.HorizontalAlignment = 'right';
+            comp.NumBitsDropDownLabel.Position = [16 34 54 22];
+            comp.NumBitsDropDownLabel.Text = 'Num Bits';
+
+            % Create SelectorNumBits
+            comp.SelectorNumBits = uidropdown(comp.CuantizacinPanel);
+            comp.SelectorNumBits.Items = {'2', '4', '8'};
+            comp.SelectorNumBits.Position = [85 34 38 22];
+            comp.SelectorNumBits.Value = '8';
+
+            % Create GraficarCuantizacionButton
+            comp.GraficarCuantizacionButton = uibutton(comp.CuantizacinPanel, 'push');
+            comp.GraficarCuantizacionButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarCuantizacionButtonPushed, true);
+            comp.GraficarCuantizacionButton.Position = [3 8 82 23];
+            comp.GraficarCuantizacionButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaCuantizacion
+            comp.SelectorGraficaCuantizacion = uidropdown(comp.CuantizacinPanel);
+            comp.SelectorGraficaCuantizacion.Items = {'1', '2'};
+            comp.SelectorGraficaCuantizacion.Position = [89 8 39 22];
+            comp.SelectorGraficaCuantizacion.Value = '2';
+
+            % Create ReconstruccinSealPanel
+            comp.ReconstruccinSealPanel = uipanel(comp);
+            comp.ReconstruccinSealPanel.Title = '7. Reconstrucción Señal';
+            comp.ReconstruccinSealPanel.Position = [26 130 141 77];
+
+            % Create GraficarReconstruccionButton
+            comp.GraficarReconstruccionButton = uibutton(comp.ReconstruccinSealPanel, 'push');
+            comp.GraficarReconstruccionButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarReconstruccionButtonPushed, true);
+            comp.GraficarReconstruccionButton.Position = [8 18 74 23];
+            comp.GraficarReconstruccionButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaReconstruccion
+            comp.SelectorGraficaReconstruccion = uidropdown(comp.ReconstruccinSealPanel);
+            comp.SelectorGraficaReconstruccion.Items = {'1', '2'};
+            comp.SelectorGraficaReconstruccion.Position = [94 18 40 22];
+            comp.SelectorGraficaReconstruccion.Value = '1';
+
+            % Create DecodificacinPanel
+            comp.DecodificacinPanel = uipanel(comp);
+            comp.DecodificacinPanel.Title = '8. Decodificación';
+            comp.DecodificacinPanel.Position = [216 130 145 77];
+
+            % Create GraficarDecodificacionButton
+            comp.GraficarDecodificacionButton = uibutton(comp.DecodificacinPanel, 'push');
+            comp.GraficarDecodificacionButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarDecodificacionButtonPushed, true);
+            comp.GraficarDecodificacionButton.Position = [13 18 68 23];
+            comp.GraficarDecodificacionButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaDecodificacion
+            comp.SelectorGraficaDecodificacion = uidropdown(comp.DecodificacinPanel);
+            comp.SelectorGraficaDecodificacion.Items = {'1', '2'};
+            comp.SelectorGraficaDecodificacion.Position = [96 18 43 22];
+            comp.SelectorGraficaDecodificacion.Value = '2';
+
+            % Create SealRecibidaPanel
+            comp.SealRecibidaPanel = uipanel(comp);
+            comp.SealRecibidaPanel.Title = '9. Señal Recibida';
+            comp.SealRecibidaPanel.Position = [413 130 138 77];
+
+            % Create GraficarSenalRecibidaButton
+            comp.GraficarSenalRecibidaButton = uibutton(comp.SealRecibidaPanel, 'push');
+            comp.GraficarSenalRecibidaButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @GraficarSenalRecibidaButtonPushed, true);
+            comp.GraficarSenalRecibidaButton.Position = [7 17 73 23];
+            comp.GraficarSenalRecibidaButton.Text = 'Graficar en';
+
+            % Create SelectorGraficaSenalRecibida
+            comp.SelectorGraficaSenalRecibida = uidropdown(comp.SealRecibidaPanel);
+            comp.SelectorGraficaSenalRecibida.Items = {'1', '2'};
+            comp.SelectorGraficaSenalRecibida.Position = [90 19 38 22];
+            comp.SelectorGraficaSenalRecibida.Value = '2';
+
+            % Create ReproduciraudioenviadoButton
+            comp.ReproduciraudioenviadoButton = uibutton(comp, 'push');
+            comp.ReproduciraudioenviadoButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @ReproduciraudioenviadoButtonPushed, true);
+            comp.ReproduciraudioenviadoButton.Position = [136 82 152 23];
+            comp.ReproduciraudioenviadoButton.Text = 'Reproducir audio enviado';
+
+            % Create ReproduciraudiorecibidoButton
+            comp.ReproduciraudiorecibidoButton = uibutton(comp, 'push');
+            comp.ReproduciraudiorecibidoButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @ReproduciraudiorecibidoButtonPushed, true);
+            comp.ReproduciraudiorecibidoButton.Position = [138 42 152 23];
+            comp.ReproduciraudiorecibidoButton.Text = 'Reproducir audio recibido';
+
+            % Create RepetirButton
+            comp.RepetirButton = uibutton(comp, 'push');
+            comp.RepetirButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @RepetirButtonPushed, true);
+            comp.RepetirButton.Position = [321 82 100 23];
+            comp.RepetirButton.Text = 'Repetir';
+
+            % Create SalirButton
+            comp.SalirButton = uibutton(comp, 'push');
+            comp.SalirButton.ButtonPushedFcn = matlab.apps.createCallbackFcn(comp, @SalirButtonPushed, true);
+            comp.SalirButton.Position = [322 42 100 23];
+            comp.SalirButton.Text = 'Salir';
+        end
+    end
+end
